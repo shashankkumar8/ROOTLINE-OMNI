@@ -1,0 +1,35 @@
+services:
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: rootline-falkordb
+    ports:
+      - "6379:6379"
+      - "3000:3000"
+    volumes:
+      - falkordb_data:/var/lib/falkordb/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rootline-app
+    ports:
+      - "8000:8000"
+    environment:
+      - FALKORDB_HOST=falkordb
+      - FALKORDB_PORT=6379
+      - FALKORDB_PASSWORD=
+      - ROOTLINE_GRAPH=rootline
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  falkordb_data:

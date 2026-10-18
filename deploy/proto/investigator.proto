@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package rootline.v1;
+
+service InvestigationService {
+  rpc InvestigateIncident (InvestigateRequest) returns (InvestigateResponse);
+  rpc SimulateSurgery (SurgeryRequest) returns (SurgeryResponse);
+  rpc CheckHealth (HealthRequest) returns (HealthResponse);
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+  string database = 2;
+  string graph = 3;
+  bool seeded = 4;
+}
+
+message InvestigateRequest {
+  string incident_id = 1;
+  bool persist = 2;
+}
+
+message CandidateScore {
+  string service_id = 1;
+  string name = 2;
+  int32 rank = 3;
+  double score = 4;
+  repeated string path = 5;
+}
+
+message InvestigateResponse {
+  string investigation_id = 1;
+  string incident_id = 2;
+  string status = 3;
+  string top_candidate = 4;
+  repeated CandidateScore candidates = 5;
+}
+
+message Edge {
+  string from_service = 1;
+  string to_service = 2;
+}
+
+message SurgeryRequest {
+  string incident_id = 1;
+  repeated Edge remove_edges = 2;
+}
+
+message SurgeryResponse {
+  string incident_id = 1;
+  bool changed = 2;
+  string top_before = 3;
+  string top_after = 4;
+  bool baseline_topology_unchanged = 5;
+  bool simulation_graph_deleted = 6;
+}

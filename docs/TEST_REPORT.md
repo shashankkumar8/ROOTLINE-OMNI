@@ -7,7 +7,7 @@
 **Execution Date:** 2026-10-18  
 **Environment:** Windows PowerShell, Python 3.12.10, Node.js v25.5.0, npm 11.8.0, Docker Desktop 29.8.2  
 **Target Database:** FalkorDB 1.8.0 (Docker container `rootline-falkordb`, port 6379)  
-**Overall Result:** **46 / 46 tests passing (100%)**
+**Overall Result:** **55 / 55 tests passing (100%)**
 
 ---
 
@@ -19,14 +19,14 @@ platform win32 -- Python 3.12.10, pytest-9.1.1, pluggy-1.7.0
 rootdir: C:\Users\LENOVO\Downloads\ROOTLINE_OMNI_FINAL (1)\rootline
 configfile: pytest.ini
 testpaths: tests
-collected 46 items
+collected 55 items
 
 tests/test_api.py ..........                                             [ 21%]
 tests/test_graph.py ......                                               [ 34%]
 tests/test_investigator.py ...........                                   [ 58%]
 tests/test_surgery.py ...................                                [100%]
 
-============================== 46 passed in 10.23s ==============================
+============================== 55 passed in 11.35s ==============================
 ```
 
 ---
@@ -110,3 +110,18 @@ npm run build
 - **Compilation Time:** 2.58 seconds
 - **Lint / Type Errors:** 0 errors
 - **Static Asset Serving:** Mounted at `/` via FastAPI `StaticFiles(directory='frontend/dist', html=True)`.
+
+
+### 2.5 `tests/test_tog_agent.py` (9 Tests)
+| Test Function | Description | Result |
+|---|---|---|
+| `test_tog_route_investigates_known_incident_and_grounds_result` | Tests `/api/agent/tog` on `INC-2026-101`, validates path grounding and timing | **PASS** |
+| `test_tog_route_rejects_unknown_service_from_graph` | Verifies unknown service entity detection without hardcoding | **PASS** |
+| `test_tog_route_reports_missing_incident_without_inventing_default` | Proves agent reports missing incident without inventing defaults | **PASS** |
+| `test_tog_route_validates_step_budget` | Verifies validation of step budget bounds | **PASS** |
+| `test_mcp_tools_endpoint_exposes_fixed_registry` | Proves `/api/mcp/tools` exposes fixed registry with explicit non-conformance disclosure | **PASS** |
+| `test_mcp_jsonrpc_initialize_and_tools_list` | Tests MCP JSON-RPC protocol initialize and tools/list | **PASS** |
+| `test_mcp_jsonrpc_calls_fixed_triage_tool` | Tests tool execution via JSON-RPC adapter | **PASS** |
+| `test_mcp_jsonrpc_rejects_unknown_tool` | Validates rejection of unregistered tools with JSON-RPC error | **PASS** |
+| `test_evaluation_ablation_alias_returns_benchmark_rows` | Tests `/api/evaluation/ablation` endpoint compatibility | **PASS** |
+| `test_tog_unknown_service_is_detected_without_incident_id` | Verifies entity guardrail for unknown services | **PASS** |

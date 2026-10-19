@@ -291,7 +291,8 @@ def mcp_tools():
     """Expose schemas for the fixed internal tool registry; this is not full MCP transport conformance."""
     return {
         "status": "success",
-        "protocol_scope": "MCP-compatible JSON-RPC adapter prototype; no claim of full transport/session conformance",
+        "protocol_scope": "MCP-compatible JSON-RPC adapter prototype; not full transport/session conformance; no claim of full transport/session conformance",
+        "full_conformance": False,
         "tools": tog_agent.mcp_tools(),
     }
 

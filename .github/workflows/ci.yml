@@ -43,7 +43,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
-      - name: Run backend test suite (44 tests)
+      - name: Run backend test suite
         env:
           FALKORDB_HOST: localhost
           FALKORDB_PORT: 6379

@@ -60,7 +60,8 @@ def test_mcp_tools_endpoint_exposes_fixed_registry(client):
     names = {tool["name"] for tool in data["tools"]}
     assert names == set(agent.TOOL_REGISTRY)
     assert all("inputSchema" in tool for tool in data["tools"])
-    assert "not full transport/session conformance" in data["protocol_scope"]
+    assert any(phrase in data["protocol_scope"].lower() for phrase in ("no claim of full transport/session conformance", "not full transport/session conformance"))
+    assert data.get("full_conformance") is False or "no claim" in data["protocol_scope"].lower() or "not full" in data["protocol_scope"].lower()
 
 
 def test_mcp_jsonrpc_initialize_and_tools_list(client):

@@ -981,7 +981,7 @@ function TogWorkbench({ incidentId }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt,
-          incident_id: incidentId || undefined,
+          incident_id: /\\bINC-\\d{4}-\\d{3}\\b/i.test(prompt) ? undefined : (incidentId || undefined),
           max_steps: Number(maxSteps),
           request_surgery: requestSurgery,
         }),

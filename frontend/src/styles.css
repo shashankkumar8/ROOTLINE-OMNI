@@ -517,3 +517,106 @@ textarea:focus, select:focus, input[type="text"]:focus {
 }
 .context-row:last-child { border-bottom: 0; }
 .context-row small { display: block; color: var(--mute); font-size: 11px; margin-top: 2px; }
+
+
+/* ToG Workbench: restrained, accessible engineering-console UI */
+.tog-workbench { display: grid; gap: 16px; min-width: 0; }
+.tog-workbench .panel { min-width: 0; }
+.tog-workbench h2 { margin-top: 4px; }
+.tog-scenario-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 16px 0;
+}
+.tog-scenario {
+  min-height: 44px;
+  text-align: left;
+  white-space: normal;
+  border: 1px solid var(--line);
+  background: var(--panel-elevated);
+}
+.tog-scenario:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: rgba(56, 189, 248, 0.08);
+}
+.tog-help { display: block; font-size: 12px; margin: 5px 0 12px; }
+.tog-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+.tog-controls select { width: auto; min-width: 74px; }
+.tog-checkbox { display: inline-flex; align-items: center; gap: 8px; color: var(--mute); }
+.tog-checkbox input { accent-color: var(--acc); width: 16px; height: 16px; }
+.tog-result-meta {
+  display: flex;
+  gap: 8px 18px;
+  flex-wrap: wrap;
+  margin-top: 9px;
+  font-size: 12px;
+}
+.tog-grounding {
+  border-top: 1px solid var(--line);
+  padding-top: 9px;
+  margin-top: 9px;
+  overflow-wrap: anywhere;
+}
+.tog-grounding small { display: block; color: var(--mute); margin-top: 5px; }
+.tog-trace-list { display: grid; gap: 10px; }
+.tog-trace-step {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  background: rgba(13, 21, 34, 0.72);
+  min-width: 0;
+}
+.tog-trace-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tog-trace-head b { margin-right: auto; }
+.tog-trace-step p { color: var(--mute); margin: 10px 0; }
+.tog-trace-step pre, .tog-tool-card pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: auto;
+  max-height: 340px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #060a10;
+  color: var(--text);
+  font-size: 12px;
+}
+.tog-trace-step summary, .tog-tool-card summary { cursor: pointer; color: var(--acc); padding: 5px 0; }
+.tog-panel-head { justify-content: space-between; align-items: flex-start; }
+.tog-tool-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.tog-tool-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 13px;
+  background: rgba(13, 21, 34, 0.62);
+}
+.tog-tool-card p { font-size: 12px; margin: 7px 0; }
+.tog-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }
+.tog-metrics .metric-card { min-width: 0; }
+.tog-workbench button:focus-visible,
+.tog-workbench input:focus-visible,
+.tog-workbench select:focus-visible,
+.tog-workbench textarea:focus-visible,
+.tog-workbench summary:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 3px;
+}
+@media (max-width: 900px) {
+  .tog-scenario-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .tog-scenario-grid, .tog-tool-grid, .tog-metrics { grid-template-columns: 1fr; }
+  .tog-controls { align-items: stretch; }
+  .tog-controls > button { width: 100%; }
+  .tog-result-meta { display: grid; grid-template-columns: 1fr; gap: 5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tog-workbench *, .tog-workbench *::before, .tog-workbench *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

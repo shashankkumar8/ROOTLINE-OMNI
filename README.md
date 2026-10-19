@@ -149,6 +149,33 @@ The tests use an isolated test graph. See [`docs/BUILD_STATUS.md`](docs/BUILD_ST
 
 Use only behaviors you have personally verified on the exact build and database configuration used for the recording. Graph Surgery requires graph-copy support from the configured FalkorDB server/client; unsupported environments should return an explicit error rather than silently creating an incomplete clone.
 
+## ToG-inspired workbench and MCP-style tool adapter
+
+The incremental ToG-inspired workbench is available in the UI's **ToG Workbench** tab. It reuses the existing tested investigator and fixed tool registry rather than introducing a second copy of the graph/query business logic.
+
+### Endpoints added
+
+- `POST /api/agent/tog` — accepts `prompt`, optional `incident_id`, bounded `max_steps` (1–8), and optional `request_surgery`. It resolves explicit service/incident identifiers against FalkorDB, executes a bounded policy based on actual prior observations, records measured timings, and validates the final candidate/path/evidence claim against graph records.
+- `GET /api/mcp/tools` — returns schemas for the existing fixed tool registry.
+- `POST /api/mcp/rpc` — a minimal JSON-RPC 2.0 adapter supporting `initialize`, `ping`, `tools/list`, and `tools/call` for the fixed tool registry.
+- `GET /api/evaluation/ablation` — alias for the existing measured synthetic benchmark endpoint.
+
+**Protocol scope:** the MCP endpoint is a prototype adapter, not a claim of full MCP transport/session conformance. It does not implement every deployment transport, session header, notification, pagination, or capability behavior required by a production MCP host. Do not describe this endpoint as fully compliant without testing against an official MCP client.
+
+**Agent scope:** this code is a bounded deterministic observation-driven policy inspired by graph-exploration research. It is not an exact reimplementation of Think-on-Graph's LLM beam-search method, Reasoning on Graphs' planning/retrieval/reasoning framework, or an autonomous LLM planner. A tool may be called when its prerequisite observation exists; the trace contains the actual tool output and measured duration.
+
+**Grounding:** claims are checked against live FalkorDB records. Unknown service-like tokens return `unknown_entity`; missing incident context returns `missing_data` instead of silently using a default incident. If grounding fails, the response returns `verification_failed`; it never forces the verification flag to true.
+
+**Counterfactual wording:** Graph Surgery removes an existing directed dependency edge in an isolated graph copy, reruns the investigation, and compares observed results. This is a counterfactual topology experiment, not proof of real-world causality or a Pearl do-calculus identification result. Dependency-topology preservation and temporary graph cleanup are reported separately. A simulation audit record can be written to the baseline graph.
+
+### Research references and what we borrow
+
+- Sun et al., [Think-on-Graph: Deep and Responsible Reasoning of Large Language Model on Knowledge Graph](https://proceedings.iclr.cc/paper_files/paper/2024/hash/10a6bdcabbd5a3d36b760daa295f63c1-Abstract-Conference.html), ICLR 2024 — motivates iterative, graph-grounded exploration and traceable paths. ROOTLINE's current policy is inspired by this idea, not a faithful reproduction of the paper's LLM beam search.
+- Luo et al., [Reasoning on Graphs: Faithful and Interpretable Large Language Model Reasoning](https://proceedings.iclr.cc/paper_files/paper/2024/hash/3e2aeb66481dd63a32421bf032b70384-Abstract-Conference.html), ICLR 2024 — motivates the separation of graph-grounded path retrieval and explanation. ROOTLINE does not implement RoG's learned relation-path planning.
+- Wu et al., [MicroRCA: Root Cause Localization of Performance Issues in Microservices](https://doi.org/10.1109/NOMS47738.2020), NOMS 2020 — motivates graph-based reasoning about anomaly propagation in microservice environments. ROOTLINE uses synthetic data and hand-authored heuristic ranking; it does not reproduce MicroRCA's evaluation.
+- [FalkorDB Python client](https://github.com/FalkorDB/falkordb-py) — documents the supported Python graph APIs, including parameterized `query`, read-only `ro_query`, and graph-copy methods.
+- [Model Context Protocol specification, 2025-06-18](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2025-06-18/schema.mdx) — reference for JSON-RPC initialization and tool schema/call message shapes. ROOTLINE's adapter remains a limited prototype, not a complete host-transport implementation.
+
 ## API overview
 
 - `GET /api/health`

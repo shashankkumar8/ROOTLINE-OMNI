@@ -167,7 +167,7 @@ function CausalPathViz({ result }) {
         <span>Counterfactual Path Comparison</span>
         <span className="mute">same incident · isolated simulation graph copy</span>
       </div>
-      <svg className="path-viz" viewBox="0 0 900 190" role="img" aria-label="Baseline and simulated causal path comparison">
+      <svg className="path-viz" viewBox="0 0 900 190" role="img" aria-label="Baseline and simulated dependency-path comparison">
         {lanes.map((lane) => (
           <g key={lane.label}>
             <text x="12" y={lane.y - 17} className="svg-label">{lane.label}</text>
@@ -250,7 +250,7 @@ function Surgery({ incidentId }) {
           <span className="eyebrow">COUNTERFACTUAL LAB</span>
           <h2>Live Graph Surgery & Isolation Sandbox</h2>
           <p className="mute" style={{ margin: 0, fontSize: 13 }}>
-            Simulate topology cuts in a transient graph clone. Baseline is strictly read-only and preserved.
+            Simulate topology cuts in a transient graph clone. Dependency topology is checked before and after; a simulation audit record may be saved to the baseline graph.
           </p>
         </div>
         <span className="badge">FalkorDB · Safe Clone</span>
@@ -271,8 +271,8 @@ function Surgery({ incidentId }) {
       {res && (
         <>
           <div className={"banner " + (res.changed ? "warn" : "ok")}>
-            <b>{res.changed ? "Causal Impact Confirmed" : "No Causal Shift"}</b>
-            <div>{res.changed ? "Cutting this relationship shifted the candidate ranking." : "Candidate rankings remained stable."}</div>
+            <b>{res.changed ? "Observed topology-dependent result change" : "No observed result change"}</b>
+            <div>{res.changed ? "Removing this edge in the isolated copy changed the observed investigation result." : "The observed investigation result remained stable for this edge removal."}</div>
             <div className="safety-grid">
               <span>Baseline topology: <b className="good-text">{res.isolation.baseline_topology_unchanged ? "UNCHANGED" : "DRIFT"}</b></span>
               <span>Baseline result: <b className="good-text">{res.isolation.baseline_unchanged ? "UNCHANGED" : "DRIFT"}</b></span>
@@ -596,6 +596,20 @@ function TopologyTab() {
   );
 }
 
+function defaultToolArguments(tool, incidentId) {
+  const properties = tool.parameters?.properties || {};
+  return Object.fromEntries(Object.entries(properties).map(([key, schema]) => {
+    if (key === "incident_id") return [key, incidentId || ""];
+    if (key === "service_id") return [key, "cache-redis"];
+    if (key === "source_service_id") return [key, tool.name === "verify_action_by_graph_surgery" ? "inventory-service" : "checkout-service"];
+    if (key === "target_service_id") return [key, "cache-redis"];
+    if (key === "max_hops") return [key, schema.default ?? 4];
+    if (key === "algorithm") return [key, schema.default ?? schema.enum?.[0] ?? "pagerank"];
+    if (key === "optional_scope") return [key, schema.default ?? "Service"];
+    return [key, schema.default ?? ""];
+  }));
+}
+
 /* ============================================================================
    TAB: Agent Trace & Fixed Tools Lab
    ============================================================================ */
@@ -633,7 +647,7 @@ function AgentTab({ incidentId }) {
       const res = await api("/api/tools/call", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tool_name: activeTool, arguments: parsedArgs })
+        body: JSON.stringify({ tool: activeTool, arguments: parsedArgs })
       });
       setToolResult(res);
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
@@ -660,20 +674,26 @@ function AgentTab({ incidentId }) {
         {agentRun && (
           <div style={{ marginTop: 16 }}>
             <div className="banner ok">
-              <b>Agent Plan Execution Complete</b> · Status: {agentRun.conclusion?.status} · Top: {agentRun.conclusion?.top_candidate || "Inconclusive"}
-              <div className="mute">Grounding Verified: {agentRun.grounding_verified ? "YES" : "NO"} · Cycle Duration: {agentRun.cycle_duration_ms} ms</div>
+              <b>Agent Plan Execution Complete</b> · Status: {agentRun.conclusion?.status || agentRun.status || agentRun.outcome || "unknown"} · Top: {agentRun.conclusion?.top_candidate || agentRun.top_candidate || "Inconclusive"}
+              <div className="mute">Grounding: {agentRun.grounding?.grounding_verified === true ? "VERIFIED" : agentRun.grounding?.grounding_verified === false ? "FAILED" : "NOT REPORTED"} · Cycle Duration: {agentRun.total_duration_ms ?? agentRun.cycle_duration_ms ?? "not reported"}{typeof (agentRun.total_duration_ms ?? agentRun.cycle_duration_ms) === "number" ? " ms" : ""}</div>
             </div>
 
             <div className="trace-timeline">
               {agentRun.trace?.map((step, idx) => (
                 <div key={idx} className="trace-step">
-                  <b>{step.stage}</b> <span className="badge">{step.ms} ms</span>
-                  <div className="mute" style={{ fontSize: 13 }}>{step.detail}</div>
+                  <b>{step.tool || step.stage || `Step ${idx + 1}`}</b> <span className="badge">{step.duration_ms ?? step.ms ?? "—"} ms</span>
+                  <div className="mute" style={{ fontSize: 13 }}>{step.branch_rationale || step.detail || step.outcome || "No explanatory detail returned."}</div>
                   <div style={{ marginTop: 4 }}>
                     {(step.operations || []).map((op, i) => (
                       <span key={i} className="chip" style={{ marginRight: 6 }}>{op}</span>
                     ))}
                   </div>
+                  {(step.arguments || step.args || step.observation) && (
+                    <details style={{ marginTop: 8 }}>
+                      <summary>Inspect actual step input and observation</summary>
+                      <pre>{JSON.stringify({ arguments: step.arguments || step.args || {}, observation: step.observation || {} }, null, 2)}</pre>
+                    </details>
+                  )}
                 </div>
               ))}
             </div>
@@ -685,7 +705,7 @@ function AgentTab({ incidentId }) {
         <h2>Fixed Tool Registry & Interactive Debugger <span className="badge">Fail-Closed Safety</span></h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
           {tools.map((t) => (
-            <div key={t.name} className="tool-card" onClick={() => { setActiveTool(t.name); setToolArgs(JSON.stringify(t.parameters?.properties ? Object.fromEntries(Object.keys(t.parameters.properties).map(k => [k, k.includes("incident") ? incidentId || "INC-2026-101" : "checkout-service"])) : {}, null, 2)); }}>
+            <div key={t.name} className="tool-card" onClick={() => { setActiveTool(t.name); setToolArgs(JSON.stringify(defaultToolArguments(t, incidentId), null, 2)); setToolResult(null); setErr(""); }}>
               <b>{t.name}</b>
               <div className="mute" style={{ fontSize: 12, margin: "6px 0" }}>{t.description}</div>
               <span className="badge">{t.safety?.enforcement || "Read-Only"}</span>
@@ -704,7 +724,7 @@ function AgentTab({ incidentId }) {
               <div style={{ marginTop: 12 }}>
                 <h4>Result ({toolResult.duration_ms} ms):</h4>
                 <pre style={{ background: "#060a10", padding: 12, borderRadius: 8, overflowX: "auto", fontSize: 12, color: "#38bdf8" }}>
-                  {JSON.stringify(toolResult.result, null, 2)}
+                  {JSON.stringify(toolResult, null, 2)}
                 </pre>
               </div>
             )}
@@ -923,6 +943,285 @@ function BenchmarkTab() {
 }
 
 /* ============================================================================
+   TAB: ToG-Inspired Investigation Workbench
+   ============================================================================ */
+const TOG_SCENARIOS = [
+  {
+    label: "Multi-hop investigation",
+    prompt: "Investigate INC-2026-101 and explain the graph-backed root-cause path.",
+    request_surgery: false,
+  },
+  {
+    label: "Abstention guardrail",
+    prompt: "Investigate INC-2026-103 and abstain if evidence is insufficient.",
+    request_surgery: false,
+  },
+  {
+    label: "Unknown entity guardrail",
+    prompt: "Investigate INC-2026-101 and check kafka-broker.",
+    request_surgery: false,
+  },
+  {
+    label: "Counterfactual experiment",
+    prompt: "Investigate INC-2026-101 and run a counterfactual edge removal experiment.",
+    request_surgery: true,
+  },
+];
+
+function TogWorkbench({ incidentId }) {
+  const [prompt, setPrompt] = useState("Investigate INC-2026-101 and explain the graph-backed root-cause path.");
+  const [requestSurgery, setRequestSurgery] = useState(false);
+  const [maxSteps, setMaxSteps] = useState(5);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState(null);
+  const [tools, setTools] = useState([]);
+  const [benchmark, setBenchmark] = useState(null);
+  const [benchmarkBusy, setBenchmarkBusy] = useState(false);
+
+  useEffect(() => {
+    api("/api/mcp/tools").then((data) => setTools(data.tools || [])).catch((e) => setError(e.message));
+  }, []);
+
+  function chooseScenario(scenario) {
+    setPrompt(scenario.prompt.replace("INC-2026-101", incidentId || "INC-2026-101"));
+    setRequestSurgery(Boolean(scenario.request_surgery));
+    setResult(null);
+    setError("");
+  }
+
+  async function runInvestigation(event) {
+    event?.preventDefault();
+    setBusy(true);
+    setError("");
+    setResult(null);
+    try {
+      const data = await api("/api/agent/tog", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt,
+          incident_id: /\\bINC-\\d{4}-\\d{3}\\b/i.test(prompt) ? undefined : (incidentId || undefined),
+          max_steps: Number(maxSteps),
+          request_surgery: requestSurgery,
+        }),
+      });
+      setResult(data);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runBenchmark() {
+    setBenchmarkBusy(true);
+    setError("");
+    try {
+      setBenchmark(await api("/api/evaluation/ablation"));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBenchmarkBusy(false);
+    }
+  }
+
+  const grounding = result?.grounding;
+  const groundingLabel = grounding
+    ? grounding.grounding_verified ? "VERIFIED" : "VERIFICATION FAILED"
+    : result?.outcome === "unknown_entity" ? "NOT EVALUATED — ENTITY GUARDRAIL"
+      : result ? "NOT VERIFIED" : "NOT RUN";
+
+  return (
+    <div className="tog-workbench">
+      <div className="panel accent-glow">
+        <span className="eyebrow">GRAPH EXPLORATION · TRACK 01</span>
+        <h2>ToG-Inspired Investigation Workbench</h2>
+        <p className="mute">
+          A bounded, deterministic observation-driven policy inspired by graph-exploration research.
+          This is not a faithful reproduction of a paper's full algorithm or an autonomous LLM planner.
+          All incident data is synthetic.
+        </p>
+        <div className="tog-scenario-grid">
+          {TOG_SCENARIOS.map((scenario) => (
+            <button
+              type="button"
+              key={scenario.label}
+              className="ghost tog-scenario"
+              onClick={() => chooseScenario(scenario)}
+              disabled={busy}
+            >
+              {scenario.label}
+            </button>
+          ))}
+        </div>
+        <form onSubmit={runInvestigation}>
+          <label htmlFor="tog-prompt" className="mute">Investigation prompt</label>
+          <textarea
+            id="tog-prompt"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            rows={3}
+            maxLength={2000}
+            required
+            aria-describedby="tog-prompt-help"
+          />
+          <div id="tog-prompt-help" className="mute tog-help">
+            State the incident ID explicitly. Unknown service-like identifiers stop the run rather than silently selecting a node.
+          </div>
+          <div className="row tog-controls">
+            <label htmlFor="tog-max-steps">Maximum steps</label>
+            <select id="tog-max-steps" value={maxSteps} onChange={(e) => setMaxSteps(Number(e.target.value))}>
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+            <label className="tog-checkbox">
+              <input
+                type="checkbox"
+                checked={requestSurgery}
+                onChange={(e) => setRequestSurgery(e.target.checked)}
+              />
+              Request counterfactual edge experiment
+            </label>
+            <button type="submit" disabled={busy || !prompt.trim()}>
+              {busy ? "Investigating graph…" : "Run ToG-inspired investigation"}
+            </button>
+          </div>
+        </form>
+        {error && <div className="banner err" role="alert">{error}</div>}
+        {result && (
+          <div className={"banner " + (result.outcome === "answered_with_path" ? "ok" : result.outcome === "inconclusive" ? "warn" : "err")} role="status">
+            <b>Outcome: {result.outcome}</b>
+            <div>{result.summary || result.reason || (result.top_candidate ? "Candidate returned by graph-backed triage." : "The workflow stopped without asserting a root cause.")}</div>
+            <div className="tog-result-meta">
+              Incident: <b>{result.incident_id || result.entity?.queried || "—"}</b>
+              <span>Steps: <b>{result.steps_executed ?? 0}</b></span>
+              <span>Total duration: <b>{typeof result.total_duration_ms === "number" ? result.total_duration_ms + " ms" : "not available"}</b></span>
+              <span>Grounding: <b>{groundingLabel}</b></span>
+            </div>
+            {grounding && (
+              <div className="tog-grounding">
+                <div>Verified incident/candidate/path/evidence against graph records.</div>
+                <small>Verified elements: {JSON.stringify(grounding.verified_elements || {})}</small>
+                {grounding.failures?.length > 0 && <small>Failures: {grounding.failures.join(" · ")}</small>}
+              </div>
+            )}
+            {result.entity?.suggestions?.length > 0 && (
+              <div className="tog-grounding">
+                Graph-backed suggestions: {result.entity.suggestions.join(", ")}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {result && (
+        <div className="panel">
+          <h2>Observation → Decision Trace <span className="badge">{result.trace?.length || 0} steps</span></h2>
+          {!result.trace?.length ? (
+            <p className="mute">No tools executed. The entity guardrail stopped the request before graph investigation.</p>
+          ) : (
+            <div className="tog-trace-list">
+              {result.trace.map((step) => (
+                <article className="tog-trace-step" key={step.step}>
+                  <div className="tog-trace-head">
+                    <b>Step {step.step}: {(step.tool || "tool").replaceAll("_", " ")}</b>
+                    <span className="badge">{step.duration_ms} ms</span>
+                    <span className={"badge " + (step.outcome === "answered_with_path" ? "ok" : step.outcome === "inconclusive" ? "warn" : step.outcome === "tool_error" || step.outcome === "verification_failed" ? "bad" : "")}>{step.outcome}</span>
+                  </div>
+                  <p>{step.branch_rationale}</p>
+                  <details>
+                    <summary>Inspect actual tool arguments and observation</summary>
+                    <h4>Arguments</h4>
+                    <pre>{JSON.stringify(step.arguments || {}, null, 2)}</pre>
+                    <h4>Observation</h4>
+                    <pre>{JSON.stringify(step.observation || {}, null, 2)}</pre>
+                  </details>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="panel">
+        <div className="row tog-panel-head">
+          <div>
+            <span className="eyebrow">FIXED TOOL CONTRACT</span>
+            <h2>Available graph tools</h2>
+          </div>
+          <span className="badge">{tools.length} registered</span>
+        </div>
+        <div className="tog-tool-grid">
+          {tools.map((tool) => (
+            <article className="tog-tool-card" key={tool.name}>
+              <b>{tool.name}</b>
+              <p className="mute">{tool.description}</p>
+              <details>
+                <summary>Input schema</summary>
+                <pre>{JSON.stringify(tool.inputSchema, null, 2)}</pre>
+              </details>
+            </article>
+          ))}
+          {!tools.length && <p className="mute">Tool catalogue unavailable. Check backend connection.</p>}
+        </div>
+        <p className="mute tog-help">These are exposed through ROOTLINE's fixed tool API and a minimal MCP-style JSON-RPC adapter. Do not present this prototype as full MCP transport/session conformance.</p>
+      </div>
+
+      <div className="panel">
+        <div className="row tog-panel-head">
+          <div>
+            <span className="eyebrow">MEASURED SYNTHETIC EVALUATION</span>
+            <h2>Graph-backed vs graph-free baseline</h2>
+            <p className="mute">Runs the same labeled synthetic cases and computes metrics from observed predictions. Results are not a production accuracy claim.</p>
+          </div>
+          <button onClick={runBenchmark} disabled={benchmarkBusy}>
+            {benchmarkBusy ? "Evaluating…" : "Run measured evaluation"}
+          </button>
+        </div>
+        {benchmark && (
+          <>
+            <div className="tog-metrics">
+              <div className="metric-card">
+                <span className="mute">Graph-backed accuracy</span>
+                <div className="big-num">{benchmark.summary?.graph_backed?.accuracy_pct ?? "—"}{typeof benchmark.summary?.graph_backed?.accuracy_pct === "number" ? "%" : ""}</div>
+                <span className="mute">{benchmark.summary?.graph_backed?.correct_count ?? "—"} / {benchmark.summary?.sample_size ?? benchmark.cases?.length ?? "—"} cases correct</span>
+              </div>
+              <div className="metric-card">
+                <span className="mute">Graph-free accuracy</span>
+                <div className="big-num">{benchmark.summary?.graph_free_flat?.accuracy_pct ?? "—"}{typeof benchmark.summary?.graph_free_flat?.accuracy_pct === "number" ? "%" : ""}</div>
+                <span className="mute">{benchmark.summary?.graph_free_flat?.correct_count ?? "—"} / {benchmark.summary?.sample_size ?? benchmark.cases?.length ?? "—"} cases correct</span>
+              </div>
+              <div className="metric-card">
+                <span className="mute">Sample size</span>
+                <div className="big-num">{benchmark.summary?.sample_size ?? benchmark.cases?.length ?? "—"}</div>
+                <span className="mute">Synthetic cases</span>
+              </div>
+            </div>
+            <div className="table-scroll">
+              <table>
+                <thead><tr><th>Incident</th><th>Expected</th><th>Graph-backed</th><th>Graph-free</th><th>Observed timing</th></tr></thead>
+                <tbody>
+                  {(benchmark.cases || []).map((item) => (
+                    <tr key={item.case_id}>
+                      <td><b>{item.incident_id}</b><small>{item.case_id}</small></td>
+                      <td>{item.expected_root_cause || item.expected_status || "Abstain / unknown"}</td>
+                      <td><span className={"badge " + (item.graph_backed.correct ? "ok" : "bad")}>{item.graph_backed.prediction || item.graph_backed.status}</span></td>
+                      <td><span className={"badge " + (item.graph_free.correct ? "ok" : "bad")}>{item.graph_free.prediction || item.graph_free.status}</span></td>
+                      <td className="mute">Graph {item.graph_backed.duration_ms} ms<br />Flat {item.graph_free.duration_ms} ms</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mute tog-help">{benchmark.summary?.methodology} {benchmark.summary?.limitation}</p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
    MAIN ROOTLINE COMMAND CENTER APPLICATION
    ============================================================================ */
 export default function App() {
@@ -987,6 +1286,9 @@ export default function App() {
           </button>
           <button className={"nav-tab" + (tab === "agent" ? " active" : "")} onClick={() => setTab("agent")}>
             🤖 Agent Trace
+          </button>
+          <button className={"nav-tab" + (tab === "tog" ? " active" : "")} onClick={() => setTab("tog")}>
+            🧭 ToG Workbench
           </button>
           <button className={"nav-tab" + (tab === "brain" ? " active" : "")} onClick={() => setTab("brain")}>
             🧠 Company Brain
@@ -1075,6 +1377,7 @@ export default function App() {
 
           {tab === "topology" && <TopologyTab />}
           {tab === "agent" && <AgentTab incidentId={sel} />}
+          {tab === "tog" && <TogWorkbench incidentId={sel} />}
           {tab === "brain" && <BrainTab />}
           {tab === "benchmark" && <BenchmarkTab />}
 

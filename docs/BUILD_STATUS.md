@@ -1,3 +1,9 @@
+## Branch integration note — 2026-10-19
+
+The branch `review/gemini-tog-integration` adds a ToG-inspired adapter, MCP-style JSON-RPC endpoints, workbench UI, and additional tests. The existing sandbox results listed below predate these changes and do not verify this branch. Re-run `python -m pytest -q` and `npm run build` on the final revision; report the exact output. No new-branch test/build result is asserted in this note.
+
+---
+
 # Build status (updated 2026-10-18)
 
 ## Verified in the user's sandbox

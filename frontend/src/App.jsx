@@ -596,6 +596,20 @@ function TopologyTab() {
   );
 }
 
+function defaultToolArguments(tool, incidentId) {
+  const properties = tool.parameters?.properties || {};
+  return Object.fromEntries(Object.entries(properties).map(([key, schema]) => {
+    if (key === "incident_id") return [key, incidentId || ""];
+    if (key === "service_id") return [key, "cache-redis"];
+    if (key === "source_service_id") return [key, tool.name === "verify_action_by_graph_surgery" ? "inventory-service" : "checkout-service"];
+    if (key === "target_service_id") return [key, "cache-redis"];
+    if (key === "max_hops") return [key, schema.default ?? 4];
+    if (key === "algorithm") return [key, schema.default ?? schema.enum?.[0] ?? "pagerank"];
+    if (key === "optional_scope") return [key, schema.default ?? "Service"];
+    return [key, schema.default ?? ""];
+  }));
+}
+
 /* ============================================================================
    TAB: Agent Trace & Fixed Tools Lab
    ============================================================================ */
@@ -660,20 +674,26 @@ function AgentTab({ incidentId }) {
         {agentRun && (
           <div style={{ marginTop: 16 }}>
             <div className="banner ok">
-              <b>Agent Plan Execution Complete</b> · Status: {agentRun.conclusion?.status} · Top: {agentRun.conclusion?.top_candidate || "Inconclusive"}
-              <div className="mute">Grounding Verified: {agentRun.grounding_verified ? "YES" : "NO"} · Cycle Duration: {agentRun.cycle_duration_ms} ms</div>
+              <b>Agent Plan Execution Complete</b> · Status: {agentRun.conclusion?.status || agentRun.status || agentRun.outcome || "unknown"} · Top: {agentRun.conclusion?.top_candidate || agentRun.top_candidate || "Inconclusive"}
+              <div className="mute">Grounding: {agentRun.grounding?.grounding_verified === true ? "VERIFIED" : agentRun.grounding?.grounding_verified === false ? "FAILED" : "NOT REPORTED"} · Cycle Duration: {agentRun.total_duration_ms ?? agentRun.cycle_duration_ms ?? "not reported"}{typeof (agentRun.total_duration_ms ?? agentRun.cycle_duration_ms) === "number" ? " ms" : ""}</div>
             </div>
 
             <div className="trace-timeline">
               {agentRun.trace?.map((step, idx) => (
                 <div key={idx} className="trace-step">
-                  <b>{step.stage}</b> <span className="badge">{step.ms} ms</span>
-                  <div className="mute" style={{ fontSize: 13 }}>{step.detail}</div>
+                  <b>{step.tool || step.stage || `Step ${idx + 1}`}</b> <span className="badge">{step.duration_ms ?? step.ms ?? "—"} ms</span>
+                  <div className="mute" style={{ fontSize: 13 }}>{step.branch_rationale || step.detail || step.outcome || "No explanatory detail returned."}</div>
                   <div style={{ marginTop: 4 }}>
                     {(step.operations || []).map((op, i) => (
                       <span key={i} className="chip" style={{ marginRight: 6 }}>{op}</span>
                     ))}
                   </div>
+                  {(step.arguments || step.args || step.observation) && (
+                    <details style={{ marginTop: 8 }}>
+                      <summary>Inspect actual step input and observation</summary>
+                      <pre>{JSON.stringify({ arguments: step.arguments || step.args || {}, observation: step.observation || {} }, null, 2)}</pre>
+                    </details>
+                  )}
                 </div>
               ))}
             </div>
@@ -685,7 +705,7 @@ function AgentTab({ incidentId }) {
         <h2>Fixed Tool Registry & Interactive Debugger <span className="badge">Fail-Closed Safety</span></h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
           {tools.map((t) => (
-            <div key={t.name} className="tool-card" onClick={() => { setActiveTool(t.name); setToolArgs(JSON.stringify(t.parameters?.properties ? Object.fromEntries(Object.keys(t.parameters.properties).map(k => [k, k.includes("incident") ? incidentId || "INC-2026-101" : "checkout-service"])) : {}, null, 2)); }}>
+            <div key={t.name} className="tool-card" onClick={() => { setActiveTool(t.name); setToolArgs(JSON.stringify(defaultToolArguments(t, incidentId), null, 2)); setToolResult(null); setErr(""); }}>
               <b>{t.name}</b>
               <div className="mute" style={{ fontSize: 12, margin: "6px 0" }}>{t.description}</div>
               <span className="badge">{t.safety?.enforcement || "Read-Only"}</span>

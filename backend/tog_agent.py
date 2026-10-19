@@ -25,7 +25,7 @@ INCIDENT_RE = re.compile(r"\bINC-\d{4}-\d{3}\b", re.IGNORECASE)
 # Match identifiers that look like service IDs, without treating arbitrary prose tokens
 # as entities. Entity existence is always decided by FalkorDB-backed resolution.
 SERVICE_TOKEN_RE = re.compile(
-    r"\b[a-z0-9]+-(?:service|redis|index|queue|gateway|db|cache|broker|api)\b",
+    r"\b[a-z0-9]+-(?:service|redis|index|queue|gateway|db|cache|broker|api|billing|postgresql|postgres|mysql|mongo|server|proxy|worker|cluster|node|store|topic|search|payment)\b",
     re.IGNORECASE,
 )
 

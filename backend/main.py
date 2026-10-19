@@ -5,10 +5,10 @@ from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field, field_validator
 
-from . import agent, algorithms, benchmark, graph, grounding, investigator, queries as q, surgery
+from . import agent, algorithms, benchmark, graph, grounding, investigator, queries as q, surgery, tog_agent
 
 app = FastAPI(
     title="ROOTLINE OMNI API",
@@ -65,6 +65,21 @@ class AgentRunIn(BaseModel):
     incident_id: str = Field(min_length=1, max_length=100)
     max_steps: int = Field(default=5, ge=1, le=10)
     request_surgery: bool = Field(default=False)
+
+
+class TogRunIn(BaseModel):
+    prompt: str = Field(min_length=1, max_length=2000)
+    incident_id: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    max_steps: int = Field(default=5, ge=1, le=8)
+    request_surgery: Optional[bool] = None
+
+    @field_validator("prompt")
+    @classmethod
+    def prompt_must_contain_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Prompt must contain non-whitespace text")
+        return value
 
 
 class ResolveEntityIn(BaseModel):
@@ -254,6 +269,46 @@ def company_brain():
         "adrs": [{"id": a[0], "title": a[1], "decision": a[2], "service": a[3]} for a in adrs],
         "teams": [{"id": t[0], "name": t[1], "service": t[2]} for t in teams],
     }
+
+
+# --- ToG-inspired agent adapter and MCP-style tool interface ---
+@app.post("/api/agent/tog")
+def run_tog(body: TogRunIn):
+    """Run a bounded, deterministic, ToG-inspired policy over graph-backed observations."""
+    try:
+        return tog_agent.run_tog_agent(
+            prompt=body.prompt,
+            incident_id=body.incident_id,
+            max_steps=body.max_steps,
+            request_surgery=body.request_surgery,
+        )
+    except tog_agent.TogInputError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@app.get("/api/mcp/tools")
+def mcp_tools():
+    """Expose schemas for the fixed internal tool registry; this is not full MCP transport conformance."""
+    return {
+        "status": "success",
+        "protocol_scope": "MCP-compatible JSON-RPC adapter prototype; no claim of full transport/session conformance",
+        "tools": tog_agent.mcp_tools(),
+    }
+
+
+@app.post("/api/mcp/rpc")
+def mcp_rpc(payload: Dict[str, Any]):
+    """Minimal JSON-RPC adapter for initialize, ping, tools/list, and tools/call."""
+    result = tog_agent.handle_mcp_jsonrpc(payload)
+    if result is None:
+        return Response(status_code=204)
+    return JSONResponse(content=result)
+
+
+@app.get("/api/evaluation/ablation")
+def evaluation_ablation():
+    """Compatibility alias that runs the measured graph-backed vs graph-free benchmark."""
+    return benchmark.run_benchmark_suite()
 
 
 # --- Static and Legal Routes ---

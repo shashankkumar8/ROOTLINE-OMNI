@@ -1,3 +1,7 @@
+> **Freshness note (2026-10-19):** This report records tests from a prior revision. The ToG-inspired workbench and MCP-style routes on `review/gemini-tog-integration` were added afterward; these historical results do not verify that branch. Run the full test suite and frontend build on the exact revision intended for release before updating any pass counts.
+
+---
+
 # ROOTLINE OMNI — Test Execution Report
 
 **Execution Date:** 2026-10-18  

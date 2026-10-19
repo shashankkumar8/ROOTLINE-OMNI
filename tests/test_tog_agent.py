@@ -132,12 +132,13 @@ def test_evaluation_ablation_alias_returns_benchmark_rows(client):
 
 
 def test_tog_unknown_service_is_detected_without_incident_id(client):
-    response = client.post(
-        "/api/agent/tog",
-        json={"prompt": "What breaks if kafka-broker goes down?"},
-    )
-    assert response.status_code == 200
-    result = response.json()
-    assert result["outcome"] == "unknown_entity"
-    assert result["entity"]["queried"] == "kafka-broker"
-    assert result["steps_executed"] == 0
+    for service in ("kafka-broker", "postgresql-billing"):
+        response = client.post(
+            "/api/agent/tog",
+            json={"prompt": f"What breaks if {service} goes down?"},
+        )
+        assert response.status_code == 200
+        result = response.json()
+        assert result["outcome"] == "unknown_entity"
+        assert result["entity"]["queried"] == service
+        assert result["steps_executed"] == 0

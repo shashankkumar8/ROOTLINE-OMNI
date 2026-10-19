@@ -46,3 +46,32 @@ def test_history_retrieval():
 
 def test_open_incidents_excluded_from_history():
     assert all(r[1] != "INC-2026-101" for r in q.history(["checkout-service"], "x") if r[3])
+
+
+def test_ro_run_executes_reads_and_blocks_mutations():
+    import pytest
+    from redis.exceptions import ResponseError
+    # Reads succeed through ro_run
+    res = graph.ro_run("MATCH (s:Service {id:$sid}) RETURN s.id, s.name", {"sid": "checkout-service"})
+    assert len(res) == 1 and res[0][0] == "checkout-service"
+    # Mutations must be blocked by FalkorDB ro_query
+    with pytest.raises(ResponseError) as exc_info:
+        graph.ro_run("CREATE (n:IllegalNode {id:'bad'})")
+    assert "read-only" in str(exc_info.value).lower()
+
+
+def test_synthetic_data_labeling_on_all_seeded_entities():
+    # Every seeded entity must be explicitly labeled synthetic
+    for label in ["Service", "Incident", "Evidence", "Deployment", "Team", "Runbook", "ADR"]:
+        rows = graph.ro_run(f"MATCH (n:{label}) RETURN count(n), count(n.synthetic)")
+        total, labeled = rows[0][0], rows[0][1]
+        assert total > 0, f"Expected seeded {label} nodes"
+        assert total == labeled, f"Unlabeled synthetic data found in {label}"
+
+
+def test_parameterized_query_safety():
+    # Verify parameterized values with special characters cannot break Cypher syntax
+    res = q.get_incident("INC-2026-101' OR 1=1 --")
+    assert res is None
+    ev = q.incident_evidence("'; DROP GRAPH rootline; --")
+    assert ev == []

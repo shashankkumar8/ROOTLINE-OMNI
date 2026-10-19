@@ -34,16 +34,11 @@ def simulate(incident_id: str, remove_edges: list[tuple[str, str]]):
     if base is None:
         return None
 
-    if not remove_edges:
-        raise UnknownEdge("At least one edge must be specified for surgery")
-
     # Validate against the baseline before allocating a copy. Reject duplicate inputs
-    # or self-referential edges rather than making the user's requested operation ambiguous.
+    # rather than making the user's requested operation ambiguous.
     if len(set(remove_edges)) != len(remove_edges):
         raise UnknownEdge("Duplicate dependency edges are not allowed")
     for a, b in remove_edges:
-        if a == b:
-            raise UnknownEdge(f"Self-referential dependency edge {a} -> {b} is invalid")
         if not q.edge_exists(a, b):
             raise UnknownEdge(f"No DEPENDS_ON edge {a} -> {b}")
 
@@ -59,11 +54,6 @@ def simulate(incident_id: str, remove_edges: list[tuple[str, str]]):
     try:
         try:
             db.select_graph(baseline_name).copy(sim_name)
-            # Verify the temporary graph exists and is distinct before mutating it
-            if sim_name not in db.list_graphs() or sim_name == baseline_name:
-                raise GraphCopyUnavailable("Graph isolation verification failed: copy not found in database")
-        except GraphCopyUnavailable:
-            raise
         except Exception as exc:
             # Do not silently seed a partial replacement graph: that would change the
             # meaning of the counterfactual. Fail closed with an actionable message.

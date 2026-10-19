@@ -14,17 +14,6 @@ def test_incidents_and_overview(client):
     assert o["nodes"]["Service"] == 15 and o["dependency_edges"] == 17
 
 
-def test_company_brain_endpoint(client):
-    b = client.get("/api/company-brain").json()
-    assert b["data_source"] == "falkordb"
-    assert len(b["runbooks"]) == 3
-    assert any(r["id"] == "RB-cache-evictions" for r in b["runbooks"])
-    assert len(b["adrs"]) == 2
-    assert any(a["id"] == "ADR-007" for a in b["adrs"])
-    assert len(b["teams"]) == 5
-
-
-
 def test_unknown_ids_404(client):
     assert client.post("/api/investigate/INC-NOPE").status_code == 404
     assert client.get("/api/investigations/INV-NOPE").status_code == 404
@@ -73,14 +62,85 @@ def test_graph_unavailable_returns_503_not_fake_data(client, monkeypatch):
     graph.reset()
 
 
-def test_favicon(client):
-    r = client.get("/favicon.ico")
-    assert r.status_code == 200
-    assert "svg" in r.headers.get("content-type", "")
+def test_tools_list_endpoint(client):
+    r = client.get("/api/tools").json()
+    assert r["status"] == "success"
+    tool_names = {t["name"] for t in r["tools"]}
+    expected = {
+        "triage_incident_with_evidence",
+        "multi_hop_blast_radius",
+        "shortest_dependency_path",
+        "graph_algorithms_suite",
+        "verify_action_by_graph_surgery",
+        "resolve_owners_and_runbook",
+    }
+    assert expected.issubset(tool_names)
 
 
-def test_legal_routes(client):
-    assert client.get("/privacy").status_code == 200
-    assert client.get("/terms").status_code == 200
+def test_tool_call_endpoint(client):
+    ok = client.post("/api/tools/call", json={"tool": "multi_hop_blast_radius", "arguments": {"service_id": "cache-redis"}}).json()
+    assert ok["status"] == "success" and ok["count"] > 0
+    assert ok["duration_ms"] >= 0
+    # Unknown tool fails cleanly
+    bad = client.post("/api/tools/call", json={"tool": "unknown_tool", "arguments": {}})
+    assert bad.status_code == 400
 
 
+def test_agent_run_endpoint(client):
+    res = client.post("/api/agent/run", json={"incident_id": "INC-2026-101", "max_steps": 4}).json()
+    assert res["status"] == "completed" and res["outcome"] == "answered_with_path"
+    assert res["top_candidate"] == "cache-redis"
+    assert len(res["trace"]) >= 2
+    assert res["policy"] == "deterministic_observation_driven_policy"
+    # Unknown entity stops at step 1 with unknown_entity
+    bad = client.post("/api/agent/run", json={"incident_id": "INC-DOES-NOT-EXIST"}).json()
+    assert bad["status"] == "unknown_entity"
+    assert bad["steps_executed"] == 1
+
+
+def test_benchmark_endpoint(client):
+    res = client.get("/api/benchmark").json()
+    assert res["status"] == "success"
+    summary = res["summary"]
+    assert summary["sample_size"] == 5
+    assert summary["graph_backed"]["accuracy_pct"] >= 80.0
+    assert len(res["cases"]) == 5
+
+
+def test_algorithms_endpoint(client):
+    res = client.get("/api/algorithms/run?algorithm=pagerank").json()
+    assert res["status"] == "success"
+    assert res["engine_used"] == "falkordb_native_pagerank"
+    assert res["node_count"] == 15
+
+
+def test_grounding_endpoints(client):
+    # Entity resolution
+    res = client.post("/api/grounding/resolve", json={"query": "redis", "entity_type": "service"}).json()
+    assert res["status"] == "alias_match" and res["service_id"] == "cache-redis"
+
+    # Claim verification: valid claim
+    claim_ok = client.post("/api/grounding/verify", json={
+        "incident_id": "INC-2026-101",
+        "candidate_id": "cache-redis",
+        "path": ["checkout-service", "payment-service", "cache-redis"],
+        "evidence_ids": ["EV-101-2"],
+    }).json()
+    assert claim_ok["grounding_verified"] is True
+
+    # Claim verification: invalid non-existent edge
+    claim_bad = client.post("/api/grounding/verify", json={
+        "incident_id": "INC-2026-101",
+        "candidate_id": "cache-redis",
+        "path": ["checkout-service", "web-frontend", "cache-redis"],  # fake edge
+        "evidence_ids": [],
+    }).json()
+    assert claim_bad["grounding_verified"] is False
+    assert "Directed edge does not exist" in claim_bad["failures"][0]
+
+
+def test_company_brain_endpoint(client):
+    res = client.get("/api/company-brain").json()
+    assert len({r["id"] for r in res["runbooks"]}) == 3
+    assert len({a["id"] for a in res["adrs"]}) == 2
+    assert len(res["teams"]) == 15

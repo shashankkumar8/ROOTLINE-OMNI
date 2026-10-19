@@ -1,41 +1,36 @@
-# ROOTLINE OMNI — Build & Verification Status
+# Build status (updated 2026-10-18)
 
-**Last Updated:** 2026-10-18  
-**Verification Environment:** Windows PowerShell, Python 3.12.10, Node.js v25.5.0, npm 11.8.0, Docker Desktop 29.8.2  
-**Target Database:** FalkorDB 1.8.0 Container (`rootline-falkordb`, port 6379)
+## Verified in the user's sandbox
 
----
+After the latest review-hardening edits, the user reports:
+- `pytest -q`: **32 tests passed** using embedded FalkorDB (`falkordblite`).
+- `npm run build`: **succeeded**.
 
-## 1. Verified Live Execution Checklist
+These results apply to the source version and environment used for that run. Re-run the commands on the exact files you submit if you make further code changes.
 
-| Check / Workflow | Command Executed | Result | Status |
-|---|---|---|---|
-| FalkorDB Container Startup | `docker run -d --name rootline-falkordb -p 6379:6379 -p 3000:3000 falkordb/falkordb:latest` | Container `57bf93ca4204` running on ports 6379/3000 | **PASS** |
-| Virtualenv & Dependencies | `pip install -r requirements-dev.txt` | Successfully installed `falkordb 1.8.0`, `fastapi`, `pytest 9.1.1` | **PASS** |
-| Environment Config | `Copy-Item .env.example .env` | Active `.env` created with local placeholders | **PASS** |
-| Idempotent Graph Seed | `python -m backend.seed` | `seeded: {'services': 15, 'incidents': 7, 'evidence': 10}` | **PASS** |
-| Full Test Suite (46 Tests) | `pytest -q` | **46 passed, 1 warning in 10.23s** against live FalkorDB | **PASS** |
-| Frontend Dependencies | `cd frontend; npm install` | 63 packages installed cleanly | **PASS** |
-| Frontend Production Build | `cd frontend; npm run build` | Built in 1.77s (`dist/` created with HTML, CSS, JS bundles) | **PASS** |
-| Backend API Startup | `uvicorn backend.main:app --port 8000` | Process started on `http://127.0.0.1:8000` | **PASS** |
-| Live API Health Probe | `Invoke-RestMethod http://127.0.0.1:8000/api/health` | `status: ok, database: falkordb, graph: rootline, seeded: True` | **PASS** |
-| Live Company Brain API | `Invoke-RestMethod http://127.0.0.1:8000/api/company-brain` | Returns 3 runbooks, 2 ADRs, 5 teams from FalkorDB | **PASS** |
-| Navigable Legal Routes | `Invoke-WebRequest http://127.0.0.1:8000/privacy` | HTTP 200 OK for `/privacy` and `/terms` | **PASS** |
-| Browser Main Journey | Browser navigated to `http://localhost:8000/` | Full UI loaded, incident investigation and surgery operational | **PASS** |
+## Still not verified
 
----
+- Docker FalkorDB on the user's Windows machine.
+- `GRAPH.COPY` compatibility on FalkorDB Cloud, if Cloud is used.
+- Full browser click-through on the target machine.
+- Public GitHub repository, demo video, live deployment, and completed hackathon submission.
 
-## 2. Key Verified Invariants
+## Release checklist
 
-1. **FalkorDB System of Record**: All services, incidents, deployments, evidence, runbooks, and ADRs are stored and queried in FalkorDB using parameterized Cypher.
-2. **True Graph Surgery Isolation**: Live Graph Surgery executes via FalkorDB `GRAPH.COPY`. Baseline topology invariance is verified by comparing exact edge counts and edge lists before and after surgery.
-3. **Automatic Teardown**: Simulation graphs are destroyed in `finally` blocks; verified by `sim_graphs() == []`.
-4. **Deterministic Heuristic Scores**: Ranking scores are transparent heuristic weights (not probabilities); verified deterministic across repeated runs.
-5. **Zero Invented Evidence**: All data is explicitly labeled as synthetic; no claims of real production telemetry or automated remediation.
+- Run `pytest -q` from the project root.
+- Run `npm run build` from `frontend/`.
+- Start the actual FalkorDB configuration intended for the demo.
+- Test `INC-2026-101` end to end.
+- Test a relevant-edge and unrelated-edge Graph Surgery case.
+- Verify temporary graph cleanup, baseline dependency-topology check, and decision persistence.
+- Complete the README AI-assistance disclosure truthfully.
+- Add the public repository and demo-video URLs.
+- Confirm the submission portal reports successful submission.
 
----
+## Important behavior and limitations
 
-## 3. Disclosed Limitations & External Dependencies
-
-- **Public URLs**: Public GitHub repository URL, demo video URL, and live cloud deployment URL will be populated upon final repository push.
-- **Docker Desktop**: Requires Docker Desktop running locally with WSL2 engine for the FalkorDB container.
+- Live Graph Surgery requires a supported graph-copy operation. If unsupported, the API should fail clearly; it does not silently create a partial seed-only clone.
+- The baseline receives a simulation audit record. `baseline_unchanged` refers to the checked dependency topology/investigation comparison, not byte-for-byte database equality.
+- Data and runbooks are synthetic. Scores are heuristics, not calibrated probabilities.
+- The application does not connect to production telemetry or execute remediation.
+- The workflow is deterministic orchestration; no autonomous multi-agent behavior is claimed.

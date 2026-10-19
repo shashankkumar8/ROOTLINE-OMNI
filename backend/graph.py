@@ -5,6 +5,7 @@ from contextvars import ContextVar
 
 from falkordb import FalkorDB
 from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import ResponseError as RedisResponseError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
 _db = None
@@ -56,9 +57,23 @@ def get_graph():
 
 
 def run(cypher: str, params: dict | None = None) -> list:
-    """Run a parameterized Cypher query and return the raw result rows."""
+    """Run a parameterized Cypher query (read-write) and return raw result rows."""
     try:
         return get_graph().query(cypher, params or {}).result_set
+    except (RedisConnectionError, RedisTimeoutError, OSError) as exc:
+        raise GraphUnavailable(str(exc)) from exc
+
+
+def ro_run(cypher: str, params: dict | None = None) -> list:
+    """Run a parameterized read-only Cypher query using native ro_query.
+    Fails closed if FalkorDB is unavailable or if a non-read query is attempted.
+    If the graph key does not exist in FalkorDB (empty/deleted graph), returns an empty result set."""
+    try:
+        return get_graph().ro_query(cypher, params or {}).result_set
+    except RedisResponseError as exc:
+        if "empty key" in str(exc).lower() or "does not exist" in str(exc).lower():
+            return []
+        raise
     except (RedisConnectionError, RedisTimeoutError, OSError) as exc:
         raise GraphUnavailable(str(exc)) from exc
 

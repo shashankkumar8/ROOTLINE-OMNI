@@ -15,6 +15,7 @@ WEIGHTS = {
     "evidence_support": 1.5,     # per supporting evidence (max 3)
     "evidence_contradiction": -2.5,  # per contradicting evidence
     "unsupported": -1.0,         # candidate has no supporting or contradicting evidence at all
+    "structural_prior": 0.0,     # optional structural prior component (e.g. tier weighting)
 }
 INCONCLUSIVE_BELOW = 4.0
 CLOSE_CALL_MARGIN = 1.0
@@ -56,8 +57,8 @@ def investigate(incident_id: str, persist: bool = True) -> dict | None:
 
     # A. multi-hop dependency traversal (the affected service itself is hop 0)
     paths = shortest(q.dependency_paths(sid), 0, 3, 4)
-    cand_hops = {**{k: v[3] for k, v in paths.items()}, sid: 0}
-    cand_path = {**{k: v[4] for k, v in paths.items()}, sid: [sid]}
+    cand_hops = {sid: 0, **{k: v[3] for k, v in paths.items()}}
+    cand_path = {sid: [sid], **{k: v[4] for k, v in paths.items()}}
     cids = list(cand_hops)
     info = q.service_info(cids + [sid])
     mark("dependency_traversal", f"{len(cids) - 1} dependencies within {q.MAX_HOPS} hops", ["dependency_paths", "service_info"])
@@ -77,7 +78,7 @@ def investigate(incident_id: str, persist: bool = True) -> dict | None:
     candidates = []
     for c in cids:
         bd = {k: 0.0 for k in WEIGHTS}
-        bd["path"] = WEIGHTS["path"] * max(0.0, 1 - cand_hops[c] / (q.MAX_HOPS + 1))
+        bd["path"] = WEIGHTS["path"] * (1 - cand_hops[c] / (q.MAX_HOPS + 1))
         if c in dep:
             bd["deployment"] = WEIGHTS["deployment"] * max(0.0, 1 - dep[c]["hours_before"] / DEPLOY_WINDOW_H)
         same = [h for h in hist.get(c, []) if h["pattern"] == inc["pattern"]]
@@ -103,8 +104,16 @@ def investigate(incident_id: str, persist: bool = True) -> dict | None:
             "hops_from_affected": cand_hops[c], "path": cand_path[c],
             "score": round(sum(bd.values()), 2), "score_breakdown": {k: round(v, 2) + 0.0 for k, v in bd.items()},
             "supporting_evidence": sup, "contradicting_evidence": con,
+            "supporting_evidence_ids": [e["id"] for e in sup],
+            "contradicting_evidence_ids": [e["id"] for e in con],
+            "evidence_ids": [e["id"] for e in sup + con],
             "deployment": dep.get(c), "history": hist.get(c, []), "same_pattern_history": same,
             "limitations": limits,
+            "missing_data": {
+                "owner": info_c["team"] is None,
+                "deployment": c not in dep,
+                "runbooks": False,  # populated below
+            },
             "verification_step": VERIFY.get(info_c["kind"], VERIFY["service"]).format(n=info_c["name"]),
         })
     candidates.sort(key=lambda x: (-x["score"], x["service_id"]))
@@ -126,14 +135,26 @@ def investigate(incident_id: str, persist: bool = True) -> dict | None:
         ad.setdefault(r[0], []).append({"id": r[1], "title": r[2], "decision": r[3]})
     for c in candidates:
         c["runbooks"], c["adrs"] = rb.get(c["service_id"], []), ad.get(c["service_id"], [])
+        c["missing_data"]["runbooks"] = len(c["runbooks"]) == 0
     mark("ownership_context", f"{sum(len(v) for v in rb.values())} runbooks, {sum(len(v) for v in ad.values())} ADRs", ["runbooks", "adrs"])
     top = candidates[0] if candidates else None
-    conclusive = bool(top and top["score"] >= INCONCLUSIVE_BELOW)
-    if not conclusive:
+    has_score = bool(top and top["score"] >= INCONCLUSIVE_BELOW)
+    is_close_call = bool(has_score and len(candidates) > 1 and (top["score"] - candidates[1]["score"] < CLOSE_CALL_MARGIN))
+    
+    if not has_score:
+        conclusive = False
+        status = "inconclusive"
+        top_cand = None
         note = "Inconclusive: no candidate reaches the minimum heuristic score. Collect more evidence before acting."
-    elif len(candidates) > 1 and top["score"] - candidates[1]["score"] < CLOSE_CALL_MARGIN:
-        note = f"Close call between {top['name']} and {candidates[1]['name']}; verify both."
+    elif is_close_call:
+        conclusive = False
+        status = "inconclusive"
+        top_cand = None
+        note = f"Inconclusive (close call): top candidates {top['name']} ({top['score']:.2f}) and {candidates[1]['name']} ({candidates[1]['score']:.2f}) are separated by less than {CLOSE_CALL_MARGIN:.1f}. Abstaining from single candidate ranking; verify both."
     else:
+        conclusive = True
+        status = "ranked"
+        top_cand = top["service_id"]
         note = f"{top['name']} ranks highest on graph evidence. This is a heuristic ranking score, not a probability."
 
     # Action (operator approval always required; nothing is executed)
@@ -166,9 +187,10 @@ def investigate(incident_id: str, persist: bool = True) -> dict | None:
         "incident": {**inc, "time": iso(inc["ts"])},
         "dependency_paths": [{"target": c["service_id"], "hops": c["hops_from_affected"], "path": c["path"]} for c in candidates if c["hops_from_affected"] > 0],
         "candidates": candidates, "blast_radius": {"affected_service": sid, "dependents": radius, "count": len(radius)},
-        "conclusion": {"status": "ranked" if conclusive else "inconclusive", "top_candidate": top["service_id"] if conclusive else None, "note": note},
+        "conclusion": {"status": status, "top_candidate": top_cand, "note": note},
         "recommended_action": {"kind": a_kind, "text": a_text, "requires_operator_approval": True},
         "prior_investigations": prior, "scoring": {"weights": WEIGHTS, "inconclusive_below": INCONCLUSIVE_BELOW,
+                                                   "close_call_margin": CLOSE_CALL_MARGIN,
                                                    "note": "Heuristic ranking score, not a calibrated probability."},
         "decision": {"status": "pending", "rationale": "", "decided": None},
         "trace": trace,

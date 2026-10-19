@@ -110,15 +110,15 @@ ADRS = [  # id, title, decision, services governed
 
 
 def seed() -> dict:
-    run("UNWIND $r AS r MERGE (t:Team {id:r.id}) SET t.name=r.name",
+    run("UNWIND $r AS r MERGE (t:Team {id:r.id}) SET t.name=r.name, t.synthetic=true",
         {"r": [{"id": a, "name": b} for a, b in TEAMS]})
-    run("UNWIND $r AS r MERGE (s:Service {id:r.id}) SET s.name=r.name, s.tier=r.tier, s.kind=r.kind",
+    run("UNWIND $r AS r MERGE (s:Service {id:r.id}) SET s.name=r.name, s.tier=r.tier, s.kind=r.kind, s.synthetic=true",
         {"r": [{"id": a, "name": b, "tier": c, "kind": d} for a, b, c, d, _ in SERVICES]})
     run("UNWIND $r AS r MATCH (t:Team {id:r.t}),(s:Service {id:r.s}) MERGE (t)-[:OWNS]->(s)",
         {"r": [{"t": e, "s": a} for a, _, _, _, e in SERVICES]})
     run("UNWIND $r AS r MATCH (a:Service {id:r.a}),(b:Service {id:r.b}) MERGE (a)-[:DEPENDS_ON]->(b)",
         {"r": [{"a": a, "b": b} for a, b in DEPENDS]})
-    run("UNWIND $r AS r MERGE (d:Deployment {id:r.id}) SET d.version=r.v, d.ts=r.ts, d.summary=r.sum "
+    run("UNWIND $r AS r MERGE (d:Deployment {id:r.id}) SET d.version=r.v, d.ts=r.ts, d.summary=r.sum, d.synthetic=true "
         "WITH d, r MATCH (s:Service {id:r.s}) MERGE (d)-[:CHANGED]->(s)",
         {"r": [{"id": a, "v": b, "ts": ts(c), "sum": d, "s": e} for a, b, c, d, e in DEPLOYMENTS]})
     run("UNWIND $r AS r MERGE (i:Incident {id:r.id}) SET i.title=r.title, i.severity=r.sev, i.ts=r.ts, "
@@ -133,10 +133,10 @@ def seed() -> dict:
         "WITH e, r MATCH (i:Incident {id:r.inc}),(s:Service {id:r.s}) MERGE (i)-[:HAS_EVIDENCE]->(e) MERGE (e)-[:ABOUT]->(s)",
         {"r": [{"id": a, "inc": b, "s": c, "kind": d, "pol": e, "text": f, "ts": ts(g)}
                for a, b, c, d, e, f, g in EVIDENCE]})
-    run("UNWIND $r AS r MERGE (b:Runbook {id:r.id}) SET b.title=r.title, b.uri=r.uri, b.steps=r.steps "
+    run("UNWIND $r AS r MERGE (b:Runbook {id:r.id}) SET b.title=r.title, b.uri=r.uri, b.steps=r.steps, b.synthetic=true "
         "WITH b, r UNWIND r.svc AS sid MATCH (s:Service {id:sid}) MERGE (b)-[:APPLIES_TO]->(s)",
         {"r": [{"id": a, "title": b, "uri": c, "steps": d, "svc": e} for a, b, c, d, e in RUNBOOKS]})
-    run("UNWIND $r AS r MERGE (a:ADR {id:r.id}) SET a.title=r.title, a.decision=r.dec "
+    run("UNWIND $r AS r MERGE (a:ADR {id:r.id}) SET a.title=r.title, a.decision=r.dec, a.synthetic=true "
         "WITH a, r UNWIND r.svc AS sid MATCH (s:Service {id:sid}) MERGE (a)-[:GOVERNS]->(s)",
         {"r": [{"id": a, "title": b, "dec": c, "svc": d} for a, b, c, d in ADRS]})
     for label in ("Service", "Incident", "Deployment", "Evidence", "Investigation", "Team"):

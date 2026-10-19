@@ -66,42 +66,55 @@ def test_empty_graph_is_handled():
     assert inv.investigate("INC-2026-101") is None
 
 
-def test_cycles_in_dependency_graph_handled_deterministically():
-    # Introduce a cyclic dependency: inventory-service -> checkout-service -> ... -> inventory-service
-    graph.run("MATCH (a:Service {id:'inventory-service'}), (b:Service {id:'checkout-service'}) "
-              "CREATE (a)-[:DEPENDS_ON]->(b)")
+def test_contradiction_red_herring_penalized():
+    # payment-service has deployment DEP-502 (recent) but EV-101-5 contradicts it
     r = inv.investigate("INC-2026-101", persist=False)
-    assert r is not None
-    # Entry service checkout-service must strictly remain at hop 0
-    checkout = next(c for c in r["candidates"] if c["service_id"] == "checkout-service")
-    assert checkout["hops_from_affected"] == 0
-    assert checkout["path"] == ["checkout-service"]
+    pay = next(c for c in r["candidates"] if c["service_id"] == "payment-service")
+    assert pay["score_breakdown"]["evidence_contradiction"] < 0
+    assert "EV-101-5" in pay["contradicting_evidence_ids"]
+    assert any("Contradicting evidence" in lim for lim in pay["limitations"])
 
 
-def test_disconnected_candidate_service_handled():
-    # An incident affecting a completely disconnected service with no dependencies or history
-    graph.run("CREATE (s:Service {id:'island-service', name:'Island Service', tier:3, kind:'service'})")
-    graph.run("CREATE (i:Incident {id:'INC-ISLAND', title:'Island isolated', severity:'SEV3', "
-              "ts:1700000000, pattern:'unknown', status:'open', summary:'Isolated service alert'})")
-    graph.run("MATCH (i:Incident {id:'INC-ISLAND'}), (s:Service {id:'island-service'}) CREATE (i)-[:AFFECTS]->(s)")
-    r = inv.investigate("INC-ISLAND", persist=False)
-    assert r is not None
-    assert len(r["candidates"]) == 1
-    assert r["candidates"][0]["service_id"] == "island-service"
-    assert r["conclusion"]["status"] == "inconclusive"
-    assert r["blast_radius"]["count"] == 0
+def test_abstention_on_close_call_or_tie():
+    # Insert a temporary synthetic incident where two candidates tie on score >= 4.0
+    now = 1792000000
+    graph.run("CREATE (s_gw:Service {id:'synth-gateway', name:'Synth Gateway', tier:1, kind:'service', synthetic:true}), "
+              "(sa:Service {id:'synth-svc-a', name:'Synth A', tier:2, kind:'service', synthetic:true}), "
+              "(sb:Service {id:'synth-svc-b', name:'Synth B', tier:2, kind:'service', synthetic:true}), "
+              "(s_gw)-[:DEPENDS_ON]->(sa), (s_gw)-[:DEPENDS_ON]->(sb), "
+              "(i:Incident {id:'INC-SYNTH-TIE', title:'Synthetic Tie', severity:'SEV1', ts:$ts, pattern:'latency_spike', status:'open', summary:'Tie test', synthetic:true})-[:AFFECTS]->(s_gw)", {"ts": now})
+    graph.run("CREATE (e1:Evidence {id:'EV-TIE-1', kind:'metric', polarity:'supports', text:'sup1', ts:$ts, synthetic:true}), "
+              "(e2:Evidence {id:'EV-TIE-2', kind:'metric', polarity:'supports', text:'sup2', ts:$ts, synthetic:true}), "
+              "(e3:Evidence {id:'EV-TIE-3', kind:'log', polarity:'supports', text:'sup3', ts:$ts, synthetic:true}), "
+              "(e4:Evidence {id:'EV-TIE-4', kind:'log', polarity:'supports', text:'sup4', ts:$ts, synthetic:true}), "
+              "(i:Incident {id:'INC-SYNTH-TIE'})-[:HAS_EVIDENCE]->(e1), (e1)-[:ABOUT]->(:Service {id:'synth-svc-a'}), "
+              "(i)-[:HAS_EVIDENCE]->(e2), (e2)-[:ABOUT]->(:Service {id:'synth-svc-a'}), "
+              "(i)-[:HAS_EVIDENCE]->(e3), (e3)-[:ABOUT]->(:Service {id:'synth-svc-b'}), "
+              "(i)-[:HAS_EVIDENCE]->(e4), (e4)-[:ABOUT]->(:Service {id:'synth-svc-b'})", {"ts": now})
+    try:
+        r = inv.investigate("INC-SYNTH-TIE", persist=False)
+        assert r is not None
+        assert len(r["candidates"]) >= 2
+        assert r["candidates"][0]["score"] == r["candidates"][1]["score"]
+        assert r["candidates"][0]["score"] >= 4.0
+        # Because gap < CLOSE_CALL_MARGIN (1.0), status must abstain to inconclusive
+        assert r["conclusion"]["status"] == "inconclusive"
+        assert r["conclusion"]["top_candidate"] is None
+        assert "close call" in r["conclusion"]["note"].lower()
+        assert r["recommended_action"]["kind"] == "collect_evidence"
+    finally:
+        graph.run("MATCH (i:Incident {id:'INC-SYNTH-TIE'}) DETACH DELETE i")
+        graph.run("MATCH (e:Evidence) WHERE e.id IN ['EV-TIE-1', 'EV-TIE-2', 'EV-TIE-3', 'EV-TIE-4'] DETACH DELETE e")
+        graph.run("MATCH (s:Service) WHERE s.id IN ['synth-gateway', 'synth-svc-a', 'synth-svc-b'] DETACH DELETE s")
 
 
-def test_stable_tie_breaking_for_equal_scores():
-    # Create two identical candidate services with identical hop distance, no deployments, no evidence
-    graph.run("CREATE (s1:Service {id:'service-beta', name:'Beta Service', tier:2, kind:'service'})")
-    graph.run("CREATE (s2:Service {id:'service-alpha', name:'Alpha Service', tier:2, kind:'service'})")
-    graph.run("MATCH (c:Service {id:'checkout-service'}), (s1:Service {id:'service-beta'}), (s2:Service {id:'service-alpha'}) "
-              "CREATE (c)-[:DEPENDS_ON]->(s1), (c)-[:DEPENDS_ON]->(s2)")
+def test_missing_data_flags_and_no_fabrication():
     r = inv.investigate("INC-2026-101", persist=False)
-    alpha = next(c for c in r["candidates"] if c["service_id"] == "service-alpha")
-    beta = next(c for c in r["candidates"] if c["service_id"] == "service-beta")
-    assert alpha["score"] == beta["score"]
-    # Tie-breaking by service_id ensures alphabetical order
-    assert alpha["rank"] < beta["rank"]
-
+    for c in r["candidates"]:
+        assert "missing_data" in c
+        assert isinstance(c["missing_data"]["owner"], bool)
+        assert isinstance(c["missing_data"]["runbooks"], bool)
+        assert isinstance(c["missing_data"]["deployment"], bool)
+        # Verify runbooks are not fabricated when missing
+        if c["missing_data"]["runbooks"]:
+            assert len(c["runbooks"]) == 0

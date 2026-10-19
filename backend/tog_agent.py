@@ -70,19 +70,27 @@ def _service_tokens(prompt: str) -> list[str]:
 
 
 def _resolve_prompt(prompt: str, incident_id: str | None) -> dict[str, Any]:
-    """Resolve any explicit incident/service-like identifiers; never infer a default ID."""
+    """Resolve all explicit entities; unknown service tokens are reported even without an incident."""
     incident_ids = INCIDENT_RE.findall(prompt or "")
     requested_incident = incident_id.strip() if incident_id else (incident_ids[0] if incident_ids else "")
-    if not requested_incident:
-        raise TogInputError("Provide incident_id or include an incident ID such as INC-2026-101 in the prompt.")
 
-    incident = grounding.resolve_incident_entity(requested_incident)
-    if incident.get("status") != "exact_match":
+    for token in _service_tokens(prompt):
+        result = grounding.resolve_service_entity(token)
+        if result.get("status") not in {"exact_match", "alias_match"}:
+            return {
+                "outcome": "unknown_entity",
+                "entity_type": "service",
+                "queried": token,
+                "suggestions": result.get("suggestions", []),
+            }
+
+    if not requested_incident:
         return {
-            "outcome": "unknown_entity",
+            "outcome": "missing_data",
             "entity_type": "incident",
-            "queried": requested_incident,
-            "suggestions": incident.get("suggestions", []),
+            "queried": None,
+            "suggestions": [],
+            "reason": "No incident ID supplied. Provide incident_id or include an incident ID such as INC-2026-101.",
         }
 
     # An explicit incident_id parameter is authoritative; a distinct incident ID in
@@ -98,16 +106,14 @@ def _resolve_prompt(prompt: str, incident_id: str | None) -> dict[str, Any]:
                 "reason": "Prompt incident ID conflicts with incident_id argument.",
             }
 
-    for token in _service_tokens(prompt):
-        result = grounding.resolve_service_entity(token)
-        if result.get("status") not in {"exact_match", "alias_match"}:
-            return {
-                "outcome": "unknown_entity",
-                "entity_type": "service",
-                "queried": token,
-                "suggestions": result.get("suggestions", []),
-            }
-
+    incident = grounding.resolve_incident_entity(requested_incident)
+    if incident.get("status") != "exact_match":
+        return {
+            "outcome": "unknown_entity",
+            "entity_type": "incident",
+            "queried": requested_incident,
+            "suggestions": incident.get("suggestions", []),
+        }
     return {"outcome": "resolved", "incident_id": incident["incident_id"]}
 
 

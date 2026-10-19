@@ -167,7 +167,7 @@ function CausalPathViz({ result }) {
         <span>Counterfactual Path Comparison</span>
         <span className="mute">same incident · isolated simulation graph copy</span>
       </div>
-      <svg className="path-viz" viewBox="0 0 900 190" role="img" aria-label="Baseline and simulated causal path comparison">
+      <svg className="path-viz" viewBox="0 0 900 190" role="img" aria-label="Baseline and simulated dependency-path comparison">
         {lanes.map((lane) => (
           <g key={lane.label}>
             <text x="12" y={lane.y - 17} className="svg-label">{lane.label}</text>
@@ -250,7 +250,7 @@ function Surgery({ incidentId }) {
           <span className="eyebrow">COUNTERFACTUAL LAB</span>
           <h2>Live Graph Surgery & Isolation Sandbox</h2>
           <p className="mute" style={{ margin: 0, fontSize: 13 }}>
-            Simulate topology cuts in a transient graph clone. Baseline is strictly read-only and preserved.
+            Simulate topology cuts in a transient graph clone. Dependency topology is checked before and after; a simulation audit record may be saved to the baseline graph.
           </p>
         </div>
         <span className="badge">FalkorDB · Safe Clone</span>
@@ -271,8 +271,8 @@ function Surgery({ incidentId }) {
       {res && (
         <>
           <div className={"banner " + (res.changed ? "warn" : "ok")}>
-            <b>{res.changed ? "Causal Impact Confirmed" : "No Causal Shift"}</b>
-            <div>{res.changed ? "Cutting this relationship shifted the candidate ranking." : "Candidate rankings remained stable."}</div>
+            <b>{res.changed ? "Observed topology-dependent result change" : "No observed result change"}</b>
+            <div>{res.changed ? "Removing this edge in the isolated copy changed the observed investigation result." : "The observed investigation result remained stable for this edge removal."}</div>
             <div className="safety-grid">
               <span>Baseline topology: <b className="good-text">{res.isolation.baseline_topology_unchanged ? "UNCHANGED" : "DRIFT"}</b></span>
               <span>Baseline result: <b className="good-text">{res.isolation.baseline_unchanged ? "UNCHANGED" : "DRIFT"}</b></span>

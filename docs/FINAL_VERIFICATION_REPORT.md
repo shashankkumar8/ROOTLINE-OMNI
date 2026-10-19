@@ -4,9 +4,13 @@
 **Track:** Track 01: Agents That Act on Connected Data  
 **Target Graph Database:** FalkorDB v4.22.1 (Redis 8.10.2) on localhost:6379  
 **Specification:** Track 01 Detailed Implementation Guide (`02_GUIDES/ROOTLINE_OMNI_Track01_Detailed_Implementation_Guide.md`)  
-**Status:** COMPLETE · PRODUCTION-READY · 100% PASSING TESTS · LIVE VERIFIED  
+**Scope:** Historical verification report for the parent `main` revision only. This is not evidence that later ToG/MCP/UI changes have passed tests.  
 
 ---
+
+## Verification scope and freshness
+
+This report retains the prior revision's recorded test output as historical context. It does **not** verify the incremental ToG-inspired adapter, MCP-style JSON-RPC routes, new workbench UI, or tests added on branch `review/gemini-tog-integration`. Those changes require a fresh CI/test run and browser journey before this report can be promoted as a current release report. No "production-ready" or blanket "100%" quality claim is made here.
 
 ## 1. Executive Summary
 ROOTLINE OMNI is an enterprise incident intelligence command center powered by a graph-native agent that reasons over connected topology, telemetry evidence, deployment events, runbooks, and historical postmortems in FalkorDB.
@@ -15,13 +19,13 @@ Unlike naive LLM chatbots that hallucinate causal paths or flat keyword search t
 1. **Deterministic, Parameterized Cypher Queries** executed with fail-closed read-only semantics (`ro_query`).
 2. **Transparent Heuristic Scoring** with supporting/contradicting evidence links and explicit abstention on close calls or missing data.
 3. **Multi-Hop Traversal & Graph Centrality Algorithms** (native FalkorDB PageRank, Betweenness Centrality, WCC, Shortest Path).
-4. **Counterfactual Isolation Surgery** that clones the topology to simulate dependency cuts while mathematically guaranteeing zero baseline graph mutation.
-5. **Fair Benchmark Evaluation** proving 100% Top-1 accuracy for the graph agent vs 33% for flat keyword search across real test cases.
+4. **Counterfactual topology experiment** that clones the graph to simulate dependency cuts, checks baseline dependency-topology invariants, and removes the temporary clone. The application may record a simulation audit node in the baseline graph; this is not byte-for-byte zero mutation.
+5. **Synthetic benchmark illustration**: a prior recorded run reported 3/3 graph-backed predictions versus 1/3 graph-free baseline predictions. This tiny synthetic set is not a generalized accuracy estimate and must be rerun after code changes.
 
 ---
 
 ## 2. Test Suite & Quality Verification
-The entire test suite was executed against live FalkorDB graph instances:
+The prior revision's report recorded the following suite against live FalkorDB. The result is historical for that exact source/environment; it does not include later branch changes:
 
 ```
 ============================= test session starts =============================
@@ -80,7 +84,7 @@ tests/test_surgery.py::test_duplicate_edges_rejected_before_copy PASSED  [100%]
 
 ---
 
-## 3. Architecture & Key Features
+## 3. Architecture & Key Features (prior revision)
 
 ### 3.1 Fail-Closed Read-Only Execution (`ro_query`)
 All diagnostic queries pass through `ro_run(cypher, params)` in `backend/graph.py`. FalkorDB strictly enforces read-only execution at the C engine level (`graph.RO_QUERY`). Any accidental or malicious mutating statement (e.g. `CREATE`, `DELETE`, `SET`) immediately raises `ResponseError` and aborts.
@@ -128,9 +132,10 @@ Truthful reporting with `engine_used: "falkordb_native"`.
   - `INC-2026-101`: Multi-hop dependency traversal to `cache-redis` (Graph: Correct, Flat: Incorrect)
   - `INC-2026-102`: Queue backlog isolation to `notification-service` (Both: Correct)
   - `INC-2026-103`: Stale data isolation to `search-index` (Graph: Correct, Flat: Incorrect)
-- **Results:**
-  - Graph-Native Agent Accuracy: **100% (3/3)** | MRR: **1.00** | Grounding: **100%**
-  - Flat Keyword Baseline Accuracy: **33% (1/3)** | MRR: **0.44** | Grounding: **N/A**
+- **Previously recorded synthetic results (must be rerun for the branch under review):**
+  - Graph-backed predictions: **3/3 correct** on the reported three-case comparison.
+  - Graph-free flat baseline: **1/3 correct** on that same reported comparison.
+  - These numbers are from a small hand-authored synthetic evaluation; they are not production accuracy estimates. Current benchmark code contains additional cases, so do not quote the older 3-case percentages as current results.
 
 ---
 
@@ -145,7 +150,7 @@ The React 18 / Vite 5.4 application in `frontend/` implements 6 dedicated naviga
 
 ---
 
-## 5. End-to-End Browser Journey Verification
+## 5. Previously recorded browser journey (not current-branch verification)
 The full application workflow was autonomously driven and verified in Chrome via the `browser_subagent`:
 - **Recording Artifact:** `C:/Users/LENOVO/.gemini/antigravity-ide/brain/116263fa-5968-4da6-963d-0a7c1de9360f/e2e_verification_1792386148028.webp`
 - Verified:
@@ -158,8 +163,23 @@ The full application workflow was autonomously driven and verified in Chrome via
 
 ---
 
-## 6. Release Deliverables
+## 6. Prior revision deliverables (not a release approval for later changes)
 - **GitHub Repository:** `https://github.com/shashankkumar8/ROOTLINE-OMNI.git` (branch `main`)
 - **Backend:** FastAPI with fail-closed Cypher, Bounded Agent, Native Algorithms, Grounding Engine, Surgery Sandbox.
 - **Frontend:** React 18 + Vite 5.4 command center with dark-mode design tokens and motion micro-interactions.
 - **Tests:** 45 automated pytest tests covering all query contracts, safety rules, edge cuts, and endpoints.
+
+
+## 7. Current branch integration status — review/gemini-tog-integration
+
+The following additions are on a review branch and are **not yet verified by this report**:
+
+- `backend/tog_agent.py`: bounded deterministic observation-driven policy that reuses the existing investigator, fixed tool registry, and grounding validator. It is ToG-inspired, not a faithful implementation of the ToG paper.
+- `POST /api/agent/tog`: endpoint for the ToG-inspired workbench.
+- `GET /api/mcp/tools` and `POST /api/mcp/rpc`: limited MCP-style schema/JSON-RPC adapter. Full MCP host transport/session compliance is not claimed.
+- `GET /api/evaluation/ablation`: alias for the existing measured synthetic benchmark.
+- New ToG Workbench UI and tests in `tests/test_tog_agent.py`.
+
+**Pending verification:** CI results on this branch; backend test suite including new tests; frontend production build; direct API checks for known/unknown entities, MCP initialization/tool calls, benchmark response, and graph-surgery cleanup; real browser interaction; README/report reconciliation.
+
+Do not merge this branch or report it complete until these checks pass and the observed outputs are recorded. If a test fails, fix the issue rather than weakening the assertion to make the suite green.

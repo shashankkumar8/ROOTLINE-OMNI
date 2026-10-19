@@ -1079,30 +1079,35 @@ export default function App() {
 
         <nav className="nav-tabs">
           <button
+            id="tab-investigate"
             className={`nav-tab ${activeTab === "investigate" ? "active" : ""}`}
             onClick={() => setActiveTab("investigate")}
           >
             <Icons.Search /> Investigation
           </button>
           <button
+            id="tab-graph"
             className={`nav-tab ${activeTab === "graph" ? "active" : ""}`}
             onClick={() => setActiveTab("graph")}
           >
             <Icons.Graph /> Topology Graph
           </button>
           <button
+            id="tab-surgery"
             className={`nav-tab ${activeTab === "surgery" ? "active" : ""}`}
             onClick={() => setActiveTab("surgery")}
           >
             <Icons.Cut /> Live Surgery Lab
           </button>
           <button
+            id="tab-brain"
             className={`nav-tab ${activeTab === "brain" ? "active" : ""}`}
             onClick={() => setActiveTab("brain")}
           >
             <Icons.Brain /> Company Brain
           </button>
           <button
+            id="tab-history"
             className={`nav-tab ${activeTab === "history" ? "active" : ""}`}
             onClick={() => setActiveTab("history")}
           >
@@ -1229,6 +1234,7 @@ export default function App() {
                     </p>
                   </div>
                   <button
+                    id="run-investigation-btn"
                     disabled={!selectedIncidentId || loading}
                     onClick={() => runInvestigation()}
                     style={{ padding: "10px 18px", fontSize: 13 }}
@@ -1480,9 +1486,9 @@ export default function App() {
           <b>ROOTLINE OMNI</b> · Graph-Native Incident Reasoning Platform · Local SRE Workspace
         </div>
         <div className="footer-links">
-          <span className="footer-link" onClick={() => navigate("/privacy")}>Privacy Policy</span>
-          <span className="footer-link" onClick={() => navigate("/terms")}>Terms of Service</span>
-          <span className="footer-link" onClick={() => alert("Scope: Demonstration environment executing deterministic heuristics over synthetic service graphs. Zero automated production mutations.")}>
+          <span id="link-privacy" className="footer-link" onClick={() => navigate("/privacy")}>Privacy Policy</span>
+          <span id="link-terms" className="footer-link" onClick={() => navigate("/terms")}>Terms of Service</span>
+          <span id="link-scope" className="footer-link" onClick={() => alert("Scope: Demonstration environment executing deterministic heuristics over synthetic service graphs. Zero automated production mutations.")}>
             Scope & Limitations
           </span>
         </div>

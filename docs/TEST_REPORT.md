@@ -3,7 +3,7 @@
 **Execution Date:** 2026-10-18  
 **Environment:** Windows PowerShell, Python 3.12.10, Node.js v25.5.0, npm 11.8.0, Docker Desktop 29.8.2  
 **Target Database:** FalkorDB 1.8.0 (Docker container `rootline-falkordb`, port 6379)  
-**Overall Result:** **45 / 45 tests passing (100%)**
+**Overall Result:** **46 / 46 tests passing (100%)**
 
 ---
 
@@ -15,21 +15,21 @@ platform win32 -- Python 3.12.10, pytest-9.1.1, pluggy-1.7.0
 rootdir: C:\Users\LENOVO\Downloads\ROOTLINE_OMNI_FINAL (1)\rootline
 configfile: pytest.ini
 testpaths: tests
-collected 45 items
+collected 46 items
 
-tests/test_api.py .........                                              [ 20%]
-tests/test_graph.py ......                                               [ 33%]
-tests/test_investigator.py ...........                                   [ 57%]
+tests/test_api.py ..........                                             [ 21%]
+tests/test_graph.py ......                                               [ 34%]
+tests/test_investigator.py ...........                                   [ 58%]
 tests/test_surgery.py ...................                                [100%]
 
-============================== 45 passed in 12.53s ==============================
+============================== 46 passed in 10.23s ==============================
 ```
 
 ---
 
 ## 2. Test File Breakdown
 
-### 2.1 `tests/test_api.py` (9 Tests)
+### 2.1 `tests/test_api.py` (10 Tests)
 | Test Function | Description | Result |
 |---|---|---|
 | `test_health` | Probes `/api/health`, verifies `status: ok` and database connectivity | **PASS** |
@@ -41,6 +41,7 @@ tests/test_surgery.py ...................                                [100%]
 | `test_memory_surfaces_prior_decision` | Verifies that a recorded decision on `cache-redis` surfaces in subsequent investigations | **PASS** |
 | `test_graph_unavailable_returns_503_not_fake_data` | Simulates database outage and verifies clean HTTP 503 error without manufactured data | **PASS** |
 | `test_favicon` | Verifies `/favicon.ico` serves official SVG graph icon with HTTP 200 | **PASS** |
+| `test_legal_routes` | Verifies `/privacy` and `/terms` standalone routes return HTTP 200 | **PASS** |
 
 ### 2.2 `tests/test_graph.py` (6 Tests)
 | Test Function | Description | Result |

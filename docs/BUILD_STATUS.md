@@ -14,12 +14,13 @@
 | Virtualenv & Dependencies | `pip install -r requirements-dev.txt` | Successfully installed `falkordb 1.8.0`, `fastapi`, `pytest 9.1.1` | **PASS** |
 | Environment Config | `Copy-Item .env.example .env` | Active `.env` created with local placeholders | **PASS** |
 | Idempotent Graph Seed | `python -m backend.seed` | `seeded: {'services': 15, 'incidents': 7, 'evidence': 10}` | **PASS** |
-| Full Test Suite (45 Tests) | `pytest -q` | **45 passed, 1 warning in 12.53s** against live FalkorDB | **PASS** |
+| Full Test Suite (46 Tests) | `pytest -q` | **46 passed, 1 warning in 10.23s** against live FalkorDB | **PASS** |
 | Frontend Dependencies | `cd frontend; npm install` | 63 packages installed cleanly | **PASS** |
-| Frontend Production Build | `cd frontend; npm run build` | Built in 2.58s (`dist/` created with HTML, CSS, JS bundles) | **PASS** |
+| Frontend Production Build | `cd frontend; npm run build` | Built in 1.77s (`dist/` created with HTML, CSS, JS bundles) | **PASS** |
 | Backend API Startup | `uvicorn backend.main:app --port 8000` | Process started on `http://127.0.0.1:8000` | **PASS** |
 | Live API Health Probe | `Invoke-RestMethod http://127.0.0.1:8000/api/health` | `status: ok, database: falkordb, graph: rootline, seeded: True` | **PASS** |
 | Live Company Brain API | `Invoke-RestMethod http://127.0.0.1:8000/api/company-brain` | Returns 3 runbooks, 2 ADRs, 5 teams from FalkorDB | **PASS** |
+| Navigable Legal Routes | `Invoke-WebRequest http://127.0.0.1:8000/privacy` | HTTP 200 OK for `/privacy` and `/terms` | **PASS** |
 | Browser Main Journey | Browser navigated to `http://localhost:8000/` | Full UI loaded, incident investigation and surgery operational | **PASS** |
 
 ---
